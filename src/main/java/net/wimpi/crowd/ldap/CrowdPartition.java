@@ -65,6 +65,7 @@ public class CrowdPartition implements Partition {
 
   private List<ServerEntry> m_CrowdOneLevelList;
   private Pattern m_UIDFilter = Pattern.compile("\\(0.9.2342.19200300.100.1.1=([^\\)]*)\\)");
+  private Pattern m_GroupFilter = Pattern.compile("\\(2.5.4.3=\\*(.*)\\*\\)");
   //AD memberOf Emulation
   private boolean m_emulateADmemberOf = false;
   private boolean m_includeNested = false;
@@ -471,13 +472,36 @@ public class CrowdPartition implements Partition {
             new ListCursor<ServerEntry>(l),
             ctx
         );
+      } 
+      else {
+        Matcher m = m_GroupFilter.matcher(ctx.getFilter().toString());
+        String groupKeyWord = "";
+        if (m.find()) {
+          groupKeyWord=m.group(1);
+        }
+
+        List<ServerEntry> l = new ArrayList<ServerEntry>();
+        try {
+          TermRestriction<String> groupName = new TermRestriction<String>(GroupTermKeys.NAME, MatchMode.CONTAINS, groupKeyWord);
+          List<String> list = m_CrowdClient.searchGroupNames(groupName, 0, Integer.MAX_VALUE);
+          for (String gn : list) {
+            DN gdn = new DN(String.format("dn=%s,%s", gn, CROWD_GROUPS_DN));
+            l.add(createGroupEntry(gdn));
+          }
+        } catch (Exception ex) {
+          log.error("findOneLevel()", ex);
+        }
+        return new BaseEntryFilteringCursor(
+            new ListCursor<ServerEntry>(l),
+            ctx
+        );        
       }
     }
 
     //3. Users
     if (dn.getName().equals(m_CrowdUsersEntry.getDn().getName())) {
       //Retrieve Filter
-      String filter = ctx.getFilter().toString();
+      String filter = ctx.getFilter().toString().replace("*","");
       if (filter.contains("(2.5.4.0=*)") ||  filter.contains("(2.5.4.0=referral)")) {
 
 
